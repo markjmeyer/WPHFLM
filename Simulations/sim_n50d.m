@@ -99,13 +99,6 @@ perlagback          = 1.1;    % 1.1 for full surface
 wpspecs.lag         = round(perlagback*size(Dx,2)/(2^(wpspecs.nlevels)));
 wpspecs.perlagback  = perlagback;
 
-%% perform hard thresholding on Dx %%
-cDx2    = cumsum(Dx.^2,2);
-pcDx2   = zeros(size(cDx2));
-for i = 1:size(pcDx2,1)
-    pcDx2(i,:) = cDx2(i,:)./sum(Dx(i,:).^2);
-end
-
 %% update Dx based on threshold %%
 model.Tx            = size(Dx,2);
 model.thresh        = model.Tx*(6/8); % model.Tx*(4/8);
