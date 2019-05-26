@@ -10,7 +10,7 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 %% add paths %%
-addpath('~/Code')
+addpath('./Code')
 
 %% set number of grid points %%
 T       = 2^6; % ten minute, 2^7 5 minute
@@ -198,7 +198,7 @@ while count < 200
     postout.runtime     = toc;
 
 	%% save output %%
-	fname               = sprintf('~/n50t128c%d.mat',count);
+	fname               = sprintf('./n50t128c%d.mat',count);
 	save(fname,'postout');
     
     %% clear large output %%
