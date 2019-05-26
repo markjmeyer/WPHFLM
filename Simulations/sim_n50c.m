@@ -17,11 +17,11 @@ T       = 2^6; % ten minute, 2^7 5 minute
 N       = 50; %100
 
 %% grid for simulation surfaces %%
-sDens   = 0.5; % 1 (64), 0.5 (128), 0.25 (256), 0.125 (512), 0.0625 (1024)
+sDens   = 1; % 1 (64), 0.5 (128), 0.25 (256), 0.125 (512), 0.0625 (1024)
 [v, t]  = meshgrid(0:sDens:(T-sDens));
 
 %% scale to control STNR %%
-stnrs   = 5000/677;
+stnrs   = 10000/677;
 % lagged %
 b1var   = 0.01;
 b1  = stnrs*(1/(60*sqrt(2*pi*b1var)))*exp(-1/(2*b1var)*(t./T-v./T-0.5).^2);
@@ -91,23 +91,11 @@ perlagback          = 1.1;    % 1.1 for full surface
 wpspecs.lag         = round(perlagback*size(Dx,2)/(2^(wpspecs.nlevels)));
 wpspecs.perlagback  = perlagback;
 
-%% perform hard thresholding on Dx %%
-% cDx2    = cumsum(Dx.^2,2);
-% pcDx2   = zeros(size(cDx2));
-% for i = 1:size(pcDx2,1)
-%     pcDx2(i,:) = cDx2(i,:)./sum(Dx(i,:).^2);
-% end
-% thresh  = find(mean(pcDx2) > 0.7329, 1, 'first' );
-
 %% update Dx based on threshold %%
 model.Tx            = size(Dx,2);
-model.thresh        = model.Tx*(6/8); % model.Tx*(6/8);
+model.thresh        = model.Tx*(6/8); % model.Tx*(4/8);
 model.keep          = 1:(model.Tx-model.thresh);
 Dx                  = Dx(:,model.keep);
-% model.Tx            = size(Dx,2);
-% model.keep          = 1:thresh;
-% model.tresh         = model.Tx - thresh;
-% Dx                  = Dx(:,model.keep); %16 x 11, %16 x 32
 
 %% MCMCspecs
 MCMCspecs.B                 = 1000;
@@ -126,15 +114,6 @@ MCMCspecs.time_update       = 100;
 MCMCspecs.tau_prior_var     = 1e3;      % the variance of tau_{ijk} when finding prior parameters for tau_{ijk}.
 MCMCspecs.tau_prior_idx     = 1;        % 1 indicate that a_tau and b_tau depend on ij, 0 indicate that they depend on jk. 
 MCMCspecs.PI_prior_var      = 0.06;     % this range should be in [0.02 0.09].
-% if isempty(Z)
-%     MCMCspecs.sampleU           = 0;
-% else
-%     MCMCspecs.sampleU           = 1;
-% end
-
-% sampleU, get_sigma
-% sampleU     = MCMCspecs.sampleU;
-% get_sigma   = sampleU;
 
 %% simulate 200 datasets %%
 rng(2017) % 2017
@@ -142,9 +121,6 @@ count   = 1; %1
 
 %%
 while count < 200
-    %% set seed %%
-%     rng(seed);
-
     %% Use Sigma_E to generate matrix of model errors %%
     E           = zeros(N,T);
     muE         = zeros(T,1);
