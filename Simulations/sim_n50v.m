@@ -6,24 +6,18 @@
 % N = 50, T = 2^6                                                  %
 %                                                                  %
 % Created:      03/20/2014                                         %
-% Modified:     04/04/2019                                         %
+% Modified:     05/26/2019                                         %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 %% add paths %%
-% addpath('./CODE');
-addpath('/Users/mjm556/Dropbox/Research/Drafts/Historical/WPHFLM Code')
-% seed    = 1;
-
-%% get seed %%
-% seeds   = getenv('SLURM_ARRAY_TASK_ID');
-% seed    = str2double(seeds);
+addpath('./Code')
 
 %% set number of grid points %%
 T       = 2^6; % ten minute, 2^7 5 minute
 N       = 50; %100
 
 %% grid for simulation surfaces %%
-sDens   = 0.5; % 1 (64), 0.5 (128), 0.25 (256), 0.125 (512), 0.0625 (1024)
+sDens   = 1; % 1 (64), 0.5 (128), 0.25 (256), 0.125 (512), 0.0625 (1024)
 [v, t]  = meshgrid(0:sDens:(T-sDens));
 
 %% scale to control STNR %%
@@ -91,30 +85,11 @@ perlagback          = 1.1;    % 1.1 for full surface
 wpspecs.lag         = round(perlagback*size(Dx,2)/(2^(wpspecs.nlevels)));
 wpspecs.perlagback  = perlagback;
 
-%% perform hard thresholding on Dx %%
-cDx2    = cumsum(Dx.^2,2);
-pcDx2   = zeros(size(cDx2));
-for i = 1:size(pcDx2,1)
-    pcDx2(i,:) = cDx2(i,:)./sum(Dx(i,:).^2);
-end
-
-%%
-% vDx                 = var(Dx);
-% nu                  = size(vDx,2);
-% unth                = sqrt(2*log(nu)); % universal threshold
-% thresh              = find(vDx > unth, 1, 'last' );
+%% update Dx based on threshold %%
 model.Tx            = size(Dx,2);
-model.thresh        = model.Tx*(4/8); % model.Tx*(6/8);
+model.thresh        = model.Tx*(6/8); % model.Tx*(4/8);
 model.keep          = 1:(model.Tx-model.thresh);
 Dx                  = Dx(:,model.keep);
-
-% model.Tx            = size(Dx,2);
-% thresh              = model.Tx*(6/8);
-
-%% update Dx based on threshold %%
-% model.thresh        = model.Tx-thresh;
-% model.keep          = 1:thresh;
-% Dx                  = Dx(:,model.keep);
 
 %% MCMCspecs
 MCMCspecs.B                 = 1000;
@@ -133,15 +108,6 @@ MCMCspecs.time_update       = 100;
 MCMCspecs.tau_prior_var     = 1e3;      % the variance of tau_{ijk} when finding prior parameters for tau_{ijk}.
 MCMCspecs.tau_prior_idx     = 1;        % 1 indicate that a_tau and b_tau depend on ij, 0 indicate that they depend on jk. 
 MCMCspecs.PI_prior_var      = 0.06;     % this range should be in [0.02 0.09].
-% if isempty(Z)
-%     MCMCspecs.sampleU           = 0;
-% else
-%     MCMCspecs.sampleU           = 1;
-% end
-
-% sampleU, get_sigma
-% sampleU     = MCMCspecs.sampleU;
-% get_sigma   = sampleU;
 
 %% set seed %%
 rng(2017) % 2020
@@ -149,9 +115,6 @@ count   = 1; %1
 
 %% simulate 200 datasets %%
 while count < 200
-    %% set seed %%
-%     rng(seed);
-
     %% Use Sigma_E to generate matrix of model errors
     E           = zeros(N,T);
     muE         = zeros(T,1);
@@ -205,7 +168,7 @@ while count < 200
     postout.runtime     = toc;
 
     %% save output %%
-    fname               = sprintf('/Users/mjm556/Documents/Research/Historical/Simulation/Vertical/Sparse/Half/N50/n50t64hv%d.mat',count);
+    fname               = sprintf('./n50t64hv%d.mat',count);
     save(fname,'postout');
 
     %% clear large output %%
