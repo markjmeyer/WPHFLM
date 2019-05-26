@@ -6,11 +6,11 @@
 % N = 15, T = 2^6                                                  %
 %                                                                  %
 % Created:      03/20/2014                                         %
-% Modified:     05/02/2019                                         %
+% Modified:     05/26/2019                                         %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 %% add paths %%
-addpath('/Users/mjm556/Dropbox/Research/Drafts/Historical/WPHFLM Code')
+addpath('~/Code')
 
 %% set number of grid points %%
 T       = 2^6; % ten minute, 2^7 5 minute
@@ -198,7 +198,7 @@ while count < 200
     postout.runtime     = toc;
 
 	%% save output %%
-	fname               = sprintf('/Users/mjm556/Documents/Research/Historical/Simulation/Cumulative/Dense/N50/n50t128c%d.mat',count);
+	fname               = sprintf('~/n50t128c%d.mat',count);
 	save(fname,'postout');
     
     %% clear large output %%
