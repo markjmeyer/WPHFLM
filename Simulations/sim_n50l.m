@@ -84,24 +84,9 @@ perlagback          = 1.1;    % 1.1 for full surface
 wpspecs.lag         = round(perlagback*size(Dx,2)/(2^(wpspecs.nlevels)));
 wpspecs.perlagback  = perlagback;
 
-%% perform hard thresholding on Dx %%
-cDx2    = cumsum(Dx.^2,2);
-pcDx2   = zeros(size(cDx2));
-for i = 1:size(pcDx2,1)
-    pcDx2(i,:) = cDx2(i,:)./sum(Dx(i,:).^2);
-end
-% vDx                 = var(Dx);
-% nu                  = size(vDx,2);
-% unth                = sqrt(2*log(nu)); % universal threshold
-% thresh              = find(vDx > unth, 1, 'last' );
-
 %% update Dx based on threshold %%
-% model.Tx            = size(Dx,2);
-% model.thresh        = model.Tx-thresh;
-% model.keep          = 1:(model.Tx-model.thresh);
-% Dx                  = Dx(:,model.keep);
 model.Tx            = size(Dx,2);
-model.thresh        = model.Tx*(4/8); % model.Tx*(6/8);
+model.thresh        = model.Tx*(6/8); % model.Tx*(4/8);
 model.keep          = 1:(model.Tx-model.thresh);
 Dx                  = Dx(:,model.keep);
 
@@ -122,15 +107,6 @@ MCMCspecs.time_update       = 100;
 MCMCspecs.tau_prior_var     = 1e3;      % the variance of tau_{ijk} when finding prior parameters for tau_{ijk}.
 MCMCspecs.tau_prior_idx     = 1;        % 1 indicate that a_tau and b_tau depend on ij, 0 indicate that they depend on jk. 
 MCMCspecs.PI_prior_var      = 0.06;     % this range should be in [0.02 0.09].
-% if isempty(Z)
-%     MCMCspecs.sampleU           = 0;
-% else
-%     MCMCspecs.sampleU           = 1;
-% end
-
-% sampleU, get_sigma
-% sampleU     = MCMCspecs.sampleU;
-% get_sigma   = sampleU;
 
 %% set seed %%
 rng(2017); % 2017, 
@@ -138,9 +114,6 @@ count   = 1;
 
 %% simulate 200 datasets %%
 while count < 200
-    %% set seed %%
-%     rng(seed);
-
     %% Use Sigma_E to generate matrix of model errors %%
     E           = zeros(N,T);
     muE         = zeros(T,1);
@@ -165,7 +138,7 @@ while count < 200
     model.H     = 1;
     model.Hstar = 0;
 
-    %% run hwfmm %%
+    %% run wphflm %%
     tic;
     try
         res             = wphflm(Dy,model,wpspecs,MCMCspecs);
