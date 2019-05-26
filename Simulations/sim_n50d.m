@@ -10,8 +10,7 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 %% add paths %%
-% addpath('./CODE');
-addpath('/Users/mjm556/Dropbox/Research/Drafts/Historical/WPHFLM Code')
+addpath('./Code')
 % seed    = 1;
 
 %% get seed %%
@@ -218,7 +217,7 @@ while count < 200
     postout.runtime     = toc;
 
     %% save output %%
-    fname               = sprintf('/Users/mjm556/Documents/Research/Historical/Simulation/Depressed/Sparse/Half/N50/n50t64hd%d.mat',count);
+    fname               = sprintf('./n50t64hd%d.mat',count);
     save(fname,'postout');
 
     %% clear large output %%
