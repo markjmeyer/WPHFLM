@@ -3,4 +3,4 @@ Code to implement Bayesian Wavelet-packet Historical Functional Linear Models as
 
 sample_script.m contains a sample script with a single simulated setting for illustration.
 
-The Simulations folder contains scripts to run simulations from the manuscript.
+The Simulations folder contains scripts to run simulations from the manuscript. The comparison simulations, comp_ref_mr_, call R from MATLAB using flat-file communication. This requires the file refFDB.R to be located in the MATLAB directory.
