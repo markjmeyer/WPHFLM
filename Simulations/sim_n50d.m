@@ -1,12 +1,8 @@
-%%%%%%%%%%%%%%%%%%%%%%%%%%% Odysssey SIM %%%%%%%%%%%%%%%%%%%%%%%%%%%
-% HWFM Simulation based on Generated data for Odyssey              %
-% Depressed Effect , burnin 1000, sample 1000                      %
+%%%%%%%%%%%%%%%%%%%%% Delayed time-specific SIM %%%%%%%%%%%%%%%%%%%%
+% Delayed time-specific Effect , burnin 1000, sample 1000          %
 % x(v) ~ GP(0, S) S~AR(1) estimated covariance from data           %
-% sample tau and pi                                                %
 % N = 50, T = 2^6                                                  %
 %                                                                  %
-% Created:      03/20/2014                                         %
-% Modified:     05/26/2019                                         %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 %% add paths %%
@@ -21,7 +17,7 @@ sDens   = 0.5; % 1 (64), 0.5 (128), 0.25 (256), 0.125 (512), 0.0625 (1024)
 [v, t]  = meshgrid(0:sDens:(T-sDens));
 
 %% scale to control STNR %%
-stnrs   = 1257/4; %5000/557;
+stnrs   = 1257/4;
 
 %% bivariate normal params %%
 mv      = 45;
@@ -54,8 +50,8 @@ end
 
 %% generate ar(1) covariance pattern %%
 ar1Corr     = eye(T);
-sigma       = 3.5; %1.5252;   % get from Journeyman data
-rho         = 0.75; %0.7697;   % get from Journeyman data
+sigma       = 3.5; % get from Journeyman data
+rho         = 0.75; % get from Journeyman data
 for i = 1:T
     for j = (i+1):T
         ar1Corr(i,j) = rho^(j-i);

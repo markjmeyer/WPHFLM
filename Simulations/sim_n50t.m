@@ -1,5 +1,5 @@
-%%%%%%%%%%%%%%%%%%%%%%%%%%% Cumlative SIM %%%%%%%%%%%%%%%%%%%%%%%%%%
-% Cumlative Effect , burnin 1000, sample 1000                      %
+%%%%%%%%%%%%%%%%%%%%%%%%% Time-specific SIM %%%%%%%%%%%%%%%%%%%%%%%%
+% Time-specific Effect , burnin 1000, sample 1000                  %
 % x(v) ~ GP(0, S) S~AR(1) estimated covariance from data           %
 % N = 50, T = 2^6                                                  %
 %                                                                  %
@@ -17,33 +17,27 @@ sDens   = 1; % 1 (64), 0.5 (128), 0.25 (256), 0.125 (512), 0.0625 (1024)
 [v, t]  = meshgrid(0:sDens:(T-sDens));
 
 %% scale to control STNR %%
-stnrs   = 10000/677;
-% lagged %
-b1var   = 0.01;
-b1  = stnrs*(1/(60*sqrt(2*pi*b1var)))*exp(-1/(2*b1var)*(t./T-v./T-0.5).^2);
-b1  = b1';
-% cumulative %
-b2  = b1;
-for i = 1:size(b1,2)
-%     b2(i,:) = 2*(1-(size(b1,2)-i)/T)*b1(i,:);
-    b2(i,:) = 2*(1-(T-i)/T)*b1(i,:);
-end
+stnrs1  = 1130/10000; %166/662;
+stnrs2  = 857/10000;
+b1var1  = 0.002;
+b1var2  = 0.001;
+b1      = stnrs2*(1/(sqrt(2*pi*b1var2)))*exp(-1/(2*b1var2)*(t./T-0*v./T-0.1).^2)-stnrs1*(1/(sqrt(2*pi*b1var1)))*exp(-1/(2*b1var1)*(t./T-0*v./T-0.2).^2);
 
 %% constrain true surface %%
-bh      = zeros(size(b2));
-for i = 1:size(b2,1)
-    for j = i:size(b2,2)
-        bh(i,j) = b2(i,j);
+bh      = zeros(size(b1));
+for i = 1:size(b1,1)
+    for j = i:size(b1,2)
+        bh(i,j) = b1(i,j);
     end
 end
 
 %% redefine T %%
-T           = size(b2,1);
+T           = size(t,1);
 
 %% generate ar(1) covariance pattern %%
 ar1Corr     = eye(T);
-sigma       = 3.5; %1.364658;   % get from Journeyman data
-rho         = 0.75; %0.7433461;   % get from Journeyman data
+sigma       = 3.5; % get from Journeyman data
+rho         = 0.75; % get from Journeyman data
 for i = 1:T
     for j = (i+1):T
         ar1Corr(i,j) = rho^(j-i);
@@ -76,9 +70,9 @@ Sigma_E     = sigmae*CovStr;
 %% shell specs for hacketts
 wpspecs.wavelet     = 'db3';
 wpspecs.wtmode      = 'zpd';
-wpspecs.nlevels     = 3; % 4
+wpspecs.nlevels     = 3;
 
-%% decompose X(v) %%
+%% decompose X(v) and Y(t) %%
 [ Dx, wpspecsx ]    = dwpt_rows(simX,wpspecs);
 wpspecs.wpspecsx    = wpspecsx;
 
@@ -111,13 +105,13 @@ MCMCspecs.tau_prior_var     = 1e3;      % the variance of tau_{ijk} when finding
 MCMCspecs.tau_prior_idx     = 1;        % 1 indicate that a_tau and b_tau depend on ij, 0 indicate that they depend on jk. 
 MCMCspecs.PI_prior_var      = 0.06;     % this range should be in [0.02 0.09].
 
-%% simulate 200 datasets %%
-rng(2017) % 2017
+%% set seed %%
+rng(2017) % 2020
 count   = 1; %1
 
-%%
+%% simulate 200 datasets %%
 while count < 200
-    %% Use Sigma_E to generate matrix of model errors %%
+    %% Use Sigma_E to generate matrix of model errors
     E           = zeros(N,T);
     muE         = zeros(T,1);
     for i = 1:N
@@ -169,15 +163,15 @@ while count < 200
     postout             = PostProcess(MCMC_beta,MCMC_zeta,MCMC_alpha,MCMC_flag_theta,MCMC_tau,MCMC_pi,MCMC_theta,theta,model,wpspecs);
     postout.runtime     = toc;
 
-	%% save output %%
-	fname               = sprintf('./n50t128c%d.mat',count);
-	save(fname,'postout');
-    
+    %% save output %%
+    fname               = sprintf('./n50t64hv%d.mat',count);
+    save(fname,'postout');
+
     %% clear large output %%
-	clear res postout
+    clear res postout
 end
-    
-%% end %%
+
+%% end
 
 
 

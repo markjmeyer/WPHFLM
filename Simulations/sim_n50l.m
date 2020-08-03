@@ -1,12 +1,8 @@
-%%%%%%%%%%%%%%%%%%%%%%%%%%% Odysssey SIM %%%%%%%%%%%%%%%%%%%%%%%%%%%
-% HWFM Simulation based on Generated data for Odyssey              %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%% Lagged SIM %%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Lagged Effect , burnin 1000, sample 1000                         %
 % x(v) ~ GP(0, S) S~AR(1) estimated covariance from data           %
-% sample tau and pi                                                %
-% N = 15, T = 2^6                                                  %
+% N = 50, T = 2^6                                                  %
 %                                                                  %
-% Created:      03/20/2014                                         %
-% Modified:     05/26/2019                                         %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 %% add paths %%
@@ -21,7 +17,7 @@ sDens   = 1; % 1 (64), 0.5 (128), 0.25 (256), 0.125 (512), 0.0625 (1024)
 [v, t]  = meshgrid(0:sDens:(T-sDens));
 
 %% scale to control STNR %%
-stnrs   = 83/331; %166/662;
+stnrs   = 83/331;
 b1var   = 0.01;
 b1      = stnrs*(1/(sqrt(2*pi*b1var)))*exp(-1/(2*b1var)*(t./T-v./T-0.5).^2);
 b1      = b1';
@@ -39,8 +35,8 @@ T           = size(b1,1);
 
 %% generate ar(1) covariance pattern %%
 ar1Corr     = eye(T);
-sigma       = 3.5; %1.5252;   % get from Journeyman data
-rho         = 0.75; %0.7697;   % get from Journeyman data
+sigma       = 3.5; % get from Journeyman data
+rho         = 0.75; % get from Journeyman data
 for i = 1:T
     for j = (i+1):T
         ar1Corr(i,j) = rho^(j-i);
