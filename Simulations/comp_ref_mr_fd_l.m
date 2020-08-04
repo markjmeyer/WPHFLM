@@ -1,13 +1,12 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%% Lagged Comparison Sim %%%%%%%%%%%%%%%%%%%%%%%%%%
+% Lagged Effect                                                           %
 % x(v) ~ GP(0, S) S~AR(1) estimated covariance from data                  %
+% Fitting Malfait & Ramsay (2003) FEB model, FDBoost, and Refund          %
 % N = 50/200, T = 2^6/2^7                                                 %
-%                                                                         %
-% Created:      02/26/2020                                                %
-% Modified:     07/08/2020                                                %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 %% add paths %%
-addpath('/Users/mjm556/Dropbox/Research/Matlab/fdaM')
+addpath('~/Code/fdaM')  % requires Malfait & Ramsay fdaM MATLAB toolbox
 path1 = getenv('PATH');
 path1 = [path1 ':/usr/local/bin'];
 setenv('PATH', path1)
@@ -44,7 +43,7 @@ bFlag   = reshape(bf,1,T*T);
 %% subset historical coefs %%
 bht     = bhr(bFlag == 1);
 
-%% set number of grid points for coarse comparison %%
+%% set number of grid points for MR comparison %%
 Tc        = 14;
 
 %% grid for coarse comparison %%
@@ -70,7 +69,7 @@ bFlagc   = reshape(bfc,1,Tc*Tc);
 %% subset coarse scale historical coefs %%
 bhtc     = (1/max(bhrc))*bhrc(bFlagc == 1);
 
-%% set number of grid points for Refund comparison %%
+%% set number of grid points for Refund/FDBoost comparison %%
 Tr        = 40;
 
 %% grid for Refund comparison %%
@@ -179,7 +178,6 @@ for seed = 1:ndata
     xfd0 = center(xfd);
 
     %% define finite element basis %%
-%     M = 63;
     M = 13; %39
     lambda = ts/M;    
     B = M;
@@ -207,7 +205,7 @@ for seed = 1:ndata
     miseS50(seed,1)	= mean((bHatc' - bhtc).^2);
     
     %% call R, run Refund %%
-    cd('/Users/mjm556/Documents/MATLAB')
+    cd('~/Documents/MATLAB')
     save('Y.mat', 'Y');
     save('simX.mat', 'simX');
     
@@ -270,24 +268,3 @@ end
 mean(sqrt(miseS50))
 mean(pwcoS50)
 
-%% save output %%
-% cd('/Users/mjm556/Dropbox/Research/Drafts/Historical/Comp Sim')
-% save('mise50lT64.mat', 'miseS50')
-% save('pwco50lT64.mat', 'pwcoS50')
-
-%%
-% cd('/Users/mjm556/Dropbox/Research/Drafts/Historical/Comp Sim')
-% save('mise50lT128.mat', 'miseS50')
-% save('pwco50lT128.mat', 'pwcoS50')
-
-%%
-% cd('/Users/mjm556/Dropbox/Research/Drafts/Historical/Comp Sim')
-% save('mise200lT64.mat', 'miseS50')
-% save('pwco200lT64.mat', 'pwcoS50')
-
-%%
-% cd('/Users/mjm556/Dropbox/Research/Drafts/Historical/Comp Sim')
-% save('mise200lT128.mat', 'miseS50')
-% save('pwco200lT128.mat', 'pwcoS50')
-
-%%

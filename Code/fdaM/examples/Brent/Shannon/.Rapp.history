@@ -1,0 +1,35 @@
+library(nlme)#
+library(tidyr)
+install.packages('tidyr')
+library(tidyr)
+setwd('/Users/mjm556/Dropbox/Research/Matlab/fdaM/examples/Brent/Shannon')
+pm25	<- read.delim('pm25Appr.dat', header = FALSE, sep = ',')#
+hrv		<- read.delim('hrvAppr.dat', header = FALSE, sep = ',')
+dim(pm25)
+dim(hrv)
+names(pm25)	<- 1:16#
+names(hrv)	<- 1:16
+pm25t	<- t(pm25)#
+hrvt	<- t(hrv)
+colnames(pm25t)	<- paste('t', 1:ncol(pm25t), sep = '')#
+colnames(hrvt)	<- paste('t', 1:ncol(hrvt), sep = '')
+pm25t		<- as.data.frame(pm25t)
+pm25t$ID	<- 1:16
+hrvt		<- as.data.frame(hrvt)
+hrvt$ID		<- 1:16
+pm25long	<- gather(pm25t, key = time, value = pm25, t1:t103)
+head(pm25t)
+pm25long	<- gather(pm25t, key = time, value = pm25, t1:t56)
+pm25long		<- pm25long[order(pm25long$ID),]
+pm25long$ntime	<- rep(1:56, 16)
+hrvlong		<- gather(hrvt, key = time, value = hrv, t1:t56)
+hrvlong		<- hrvlong[order(hrvlong$ID),]
+hrvlong$ntime	<- rep(1:56, 16)
+modelp1	<- gls(log(pm25) ~ ntime, data = pm25long, correlation = corAR1(form = ~ 1 | ID))
+modelh1	<- gls(log(hrv) ~ ntime, data = hrvlong, correlation = corAR1(form = ~ 1 | ID))
+xp <- modelp1$modelStruct$corStruct#
+xh <- modelh1$modelStruct$corStruct
+coef(xp, unconstrained = FALSE)
+coef(xh, unconstrained = FALSE)
+summary(modelp1)$sigma^2
+summary(modelh1)$sigma^2

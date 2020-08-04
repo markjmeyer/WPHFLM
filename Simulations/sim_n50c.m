@@ -1,19 +1,21 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%% Cumlative SIM %%%%%%%%%%%%%%%%%%%%%%%%%%
 % Cumlative Effect , burnin 1000, sample 1000                      %
 % x(v) ~ GP(0, S) S~AR(1) estimated covariance from data           %
-% N = 50, T = 2^6                                                  %
+% N = 50, T = 2^6/2^7                                              %
 %                                                                  %
+% Created:      03/20/2014                                         %
+% Modified:     02/18/2019                                         %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 %% add paths %%
-addpath('./Code')
+addpath('~/Code');
 
 %% set number of grid points %%
-T       = 2^6; % ten minute, 2^7 5 minute
-N       = 50; %100
+T       = 2^6;
+N       = 50;
 
 %% grid for simulation surfaces %%
-sDens   = 1; % 1 (64), 0.5 (128), 0.25 (256), 0.125 (512), 0.0625 (1024)
+sDens   = 1; % 1 (64), 0.5 (128)
 [v, t]  = meshgrid(0:sDens:(T-sDens));
 
 %% scale to control STNR %%
@@ -62,8 +64,8 @@ end
 
 %% Generate Covariance structure for E ~ GP(0, Sigma_E)
 CovStr      = eye(T);
-sigmae      = 0.1;
-rho         = 0.5;
+sigmae      = 0.1; % 0.3338735, 0.1
+rho         = 0.5; % 0.7836909, 0.5
 for i = 1:T
     for j = (i+1):T
         CovStr(i,j) = rho^(j-i);
@@ -87,9 +89,9 @@ perlagback          = 1.1;    % 1.1 for full surface
 wpspecs.lag         = round(perlagback*size(Dx,2)/(2^(wpspecs.nlevels)));
 wpspecs.perlagback  = perlagback;
 
-%% update Dx based on threshold %%
+%% perform hard thresholding on Dx %%
 model.Tx            = size(Dx,2);
-model.thresh        = model.Tx*(6/8); % model.Tx*(4/8);
+model.thresh        = model.Tx*(6/8); % model.Tx*(4/8); % half
 model.keep          = 1:(model.Tx-model.thresh);
 Dx                  = Dx(:,model.keep);
 
@@ -112,11 +114,10 @@ MCMCspecs.tau_prior_idx     = 1;        % 1 indicate that a_tau and b_tau depend
 MCMCspecs.PI_prior_var      = 0.06;     % this range should be in [0.02 0.09].
 
 %% simulate 200 datasets %%
-rng(2017) % 2017
-count   = 1; %1
+for seed = 1:200
+    %% set seed %%
+    rng(seed);
 
-%%
-while count < 200
     %% Use Sigma_E to generate matrix of model errors %%
     E           = zeros(N,T);
     muE         = zeros(T,1);
@@ -143,13 +144,8 @@ while count < 200
 
     %% run hwfmm %%
     tic;
-    try
-        res             = wphflm(Dy,model,wpspecs,MCMCspecs);
-    catch ME
-        continue
-    end
+    res             = wphflm(Dy,model,wpspecs,MCMCspecs);
     res.MCMCrun     = toc;
-    count           = count + 1;
 
     %% extract results for post-processing %%
     MCMC_beta           = res.MCMC_beta;
@@ -170,7 +166,7 @@ while count < 200
     postout.runtime     = toc;
 
 	%% save output %%
-	fname               = sprintf('./n50t128c%d.mat',count);
+	fname               = sprintf('n50t256c%d.mat',seed);
 	save(fname,'postout');
     
     %% clear large output %%

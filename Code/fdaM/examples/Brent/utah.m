@@ -1,0 +1,234 @@
+% Analysis to be performed on Utah data (based on "lipemg.m" in the lip
+% directory
+%   -------------------------------------------------------------------
+% Created: 15Mar03
+% Modified: 25Mar03
+
+addpath ('c:\matlab6p5\fdaM')
+addpath ('c:\matlab6p5\fdaM\examples\Brent')
+
+%  -----------------------------------------------------------------------
+%       Utah air pollution data
+%  -----------------------------------------------------------------------
+
+%  ----------------  input the data  ------------------------
+
+pefmat = load ('pef.dat'); 
+pm10mat = load ('pm10.dat'); 
+
+% pefmat    - response matrix (lipmat)
+% pm10mat   - predictor matrix (EMGmat)
+
+%  ---------------  define number of records and time values in days
+N = size(pm10mat,2); 
+timevec = linspace(0,99,100)'; 
+
+%  --------------- set up data with EMG lagged by 50 milliseconds
+tfine = (0:0.1:99)'; 
+nfine = length(tfine); 
+
+ pefmatlag = zeros(nfine,N); 
+ pm10matlag = zeros(nfine,N); 
+
+for i=1:N 
+    peftemp = interp1(timevec,pefmat(:,i),tfine); 
+    pm10temp = interp1(timevec,pm10mat(:,i),tfine); 
+    pefmatlag(:,i) = peftemp(1:nfine);
+    pm10matlag(:,i) = pm10temp(1:nfine); 
+end 
+
+
+%nfine = nfine - 50; 
+%tfine = tfine(1:nfine); 
+T = 99; 
+
+%  ----------------------- Now we convert these discrete data 
+%  ----------------------- to functional data objects using a B­spline basis. 
+nbasis = 25; 
+norder = 6; 
+basis = create_bspline_basis([0,T], nbasis, norder); 
+peffd = data2fd(pefmatlag, tfine, basis); 
+pm10fd = data2fd(pm10matlag, tfine, basis); 
+
+%  ----------------  We'll also need the mean function for each variable. 
+pm10meanfd = mean(pm10fd); 
+pefmeanfd = mean(peffd); 
+
+%  ---------------  centered functions
+peffd0 = center(peffd); 
+pm10fd0 = center(pm10fd); 
+
+
+%   -------------   CAN't be done for UTAH data
+%   ---------------------------------------------------------------
+%   ------------------  Plotting the Bivariate Correlation Function 
+
+%  --------------  First we define a fine mesh of time values. 
+nfiney = 49; 
+tmesh = linspace(1,T,nfiney)'; 
+
+%   --------    get the discrete data from the lagged functions. 
+pefmat = eval_fd(peffd, tmesh); 
+pm10mat = eval_fd(pm10fd, tmesh); 
+
+%   --------- compute the correlations between the measures across curves. 
+pefpm10corr = corrcoef([pefmat',pm10mat']); 
+pefpm10corr = pefpm10corr(50:98,1:49); 
+for i=2:49, pefpm10corr(i,1:i-1) = 0; end 
+
+
+%  ------------- display the correlation surface
+%  ----------------Use the rotation and zoom features of Matlab's 
+%  -----surface display function to examine the surface from various angles. 
+%  -- COLOR plotting: a) save as encapsulated color postscript file
+%                     b) in GhostView use "PS printing" option
+subplot(1,1,1) 
+colormap(hot) 
+surf(tmesh, tmesh, pefpm10corr') 
+xlabel('\fontsize{16} s') 
+ylabel('\fontsize{16} t') 
+axis([0,99,0,99,-1,1]) 
+axis('square') 
+
+%   -----------------------------------------------------------------------
+%      NOT done for the utah data above
+%   -----------------------------------------------------------------------
+
+
+%  ------------------ Defining the Finite Element Basis 
+M = 20; 
+lambda = T/M; 
+
+B = 5; 
+
+% -- got the functions "NodeIndexation" and "ParalleloGrid" from J. Ramsay
+eleNodes = NodeIndexation(M, B); 
+
+[Si, Ti] = ParalleloGrid(M, T, B); 
+
+%   -- Estimating the Regression Function 
+%  - The actual computation requires a discretization of the continuous 
+%  - variable t. We define the spacing between these discrete values by 
+%  - specifying the number of discrete values within each of the M intervals. 
+%  - A value of two or four is usually sufficient to ensure a reasonably 
+%  - accurate approximation. 
+
+npts = 4; 
+ntpts = M*npts; 
+delta = lambda/(2*npts); 
+tpts = linspace(delta, T - delta, M*npts)';
+
+%  - Set up the design matrix that will be used in the discrete version 
+%  - of the regression analysis. 
+%%%%%   ------  This is a fairly length calculation. 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+psiMat = DesignMatrixFD(pm10fd0, npts, M, eleNodes, Si, Ti, B); 
+
+%  - check design matrix is NOT singular
+
+singvals = svd(full(psiMat)); 
+condition = max(singvals)/min(singvals); 
+disp(['Condition number = ',num2str(condition)]) 
+
+%  - vector of dependent variable values.  
+yMat = eval_fd(peffd0,tpts)'; 
+yVect = reshape(yMat, N*M*npts, 1);
+
+%  - Least squares approximation that gives us our vector of regression 
+%  - coefficients multiplying our basis functions. 
+
+bHat = psiMat\yVect; 
+%  - Warning: Rank deficient, rank = 0
+
+
+%%%       ----------    Plotting the Regression Function 
+
+trisurf(eleNodes, Si, Ti, bHat) 
+xlabel('\fontsize{12} s'); 
+ylabel('\fontsize{12} t'); 
+title(['pef/pm10 Data ','M = ',num2str(M),', B = ',num2str(B)]) 
+
+% - More refined plot (color): use special function BetaEvalFD. 
+
+svec = linspace(0,T,13*6+1)'; 
+tvec = linspace(0,T,13*6+1)'; 
+betaMat = BetaEvalFD(svec, tvec, bHat, M, T, lambda, ... 
+eleNodes, Si, Ti, B); 
+subplot(1,1,1) 
+colormap(hot) 
+H = imagesc(tvec*1000, tvec*1000, betaMat); 
+xlabel('\fontsize{16} s (msec)') 
+ylabel('\fontsize{16} t (msec)') 
+axis([0,640,0,640]) 
+axis('square') 
+Haxes = gca; 
+set(Haxes,'Ydir','normal') 
+
+%%%%    -------  Computing the Fit to the Data 
+%  - Set up a large super­matrix containing the approximated pef 
+%  - acceleration curves using the special function XMatrix. 
+%%%         --- This is also a lengthy calculation. 
+
+psiArray = XMatrix(pm10fd, tmesh, M, eleNodes, Si, Ti, B); 
+
+%  - Matrix of approximation values for the pef acceleration curves 
+
+yHat1 = zeros(nfiney,N); 
+
+for i=1:N 
+Xmati = squeeze(psiArray(i,:,:))'; 
+yHat1(:,i) = Xmati*bHat; 
+end 
+
+%  - Approximation is based only on the estimated regression function b(s,t). 
+%  - To complete the approximation, we must get the intercept function a(t). 
+%  - This requires using the mean pm10 curve as a model, and subtracting 
+%  - the fit that this gives from the mean pef acceleration. 
+
+psimeanArray = XMatrix(pm10meanfd, tmesh, M, eleNodes, Si, Ti, B); 
+yHatMean = squeeze(psimeanArray)'*bHat; 
+pefmeanvec = eval_fd(pefmeanfd, tmesh); 
+alphaHat = pefmeanvec - yHatMean; 
+
+%  - Plot the intercept function. 
+plot(tmesh,alphaHat) 
+title('Estimated intercept function'); 
+
+%  - Final fit to the data. 
+yHat = alphaHat*ones(1,N) + yHat1; 
+
+%  - Plot the data and the fit to the data. 
+subplot(2,1,1) 
+plot(tmesh, yHat) 
+axis([0,T,-4,4]) 
+subplot(2,1,2) 
+plot(tmesh, pefmat) 
+axis([0,T,-4,4])
+
+%  - Plot the residuals. 
+subplot(1,1,1) 
+resmat = pefmat -- yHat; 
+plot(tmesh, resmat) 
+axis([0,T,-4,4]) 
+
+
+%%%%%       ----- Assessing the Fit 
+%  - Error sum of squares function. 
+SSE = sum(resmat.^2,2); 
+
+%  - Benchmark against which we can assess this fit, we need to get the 
+%  - corresponding error sum of squares function when the model is simply 
+%  - the mean pef acceleration curve. 
+
+pefmat0 = eval_fd(peffd0, tmesh); 
+SSY = sum(pefmat0.^2,2); 
+
+%  - compute a squared multiple correlation function and plot it. 
+%  - Don't be suprised, though, to see it go below zero; 
+%  - the fit from the mean is not embedded within the fit by the model. 
+RSQ = (SSY -- SSE)./SSY; 
+subplot(1,1,1) 
+plot(tmesh,RSQ); 
+axis([0,0.64,-0.5,1]) 
+

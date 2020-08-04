@@ -1,0 +1,191 @@
+%% Created: 25Oct2004
+%% Modified: 25Oct2004
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%% LASSO analysis of the "Journeyman" data set
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+ML1 = 30;
+lambdaL1 = T/ML1; 
+
+% --- Number of time blocks going back
+BL1 = 20; 
+
+% -- got the functions "NodeIndexation" and "ParalleloGrid" from J. Ramsay
+eleNodesL1 = NodeIndexation(ML1, BL1); 
+
+[SiL1, TiL1] = ParalleloGrid(ML1, T, BL1); 
+
+%   -- Estimating the Regression Function 
+%  - The actual computation requires a discretization of the continuous 
+%  - variable t. We define the spacing between these discrete values by 
+%  - specifying the number of discrete values within each of the M intervals. 
+%  - A value of two or four is usually sufficient to ensure a reasonably 
+%  - accurate approximation. 
+
+nptsL1 = 2; 
+ntptsL1 = ML1*nptsL1; 
+deltaL1 = lambdaL1/(2*nptsL1); 
+tptsL1 = linspace(deltaL1, T - deltaL1, ML1*nptsL1)';
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%  -- Primary object to be worked with (might introduce the non-centered
+%%  version: to be tried next -- end of Sept. 2004)
+
+if (ML1==M) & (BL1==B)
+  XL1Mat = psiMat;
+else
+  XL1Mat = DesignMatrixFD(pm25fd0, nptsL1, ML1, eleNodesL1, SiL1, TiL1, BL1); 
+end
+
+
+
+%  - check design matrix is NOT singular
+singvals = svd(full(XL1Mat)); 
+condition = max(singvals)/min(singvals); 
+disp(['Condition number = ',num2str(condition)]) 
+
+
+%% -- A few variables that are the same for all the parallel analysis below
+size_tpts = size(tptsL1,1);
+
+% -- Set up "y" vector
+%  - vector of dependent variable values.  
+yMatL1 = eval_fd(hrvfd0,tptsL1)'; 
+yVectL1 = reshape(yMatL1, N*ML1*nptsL1, 1);
+
+lambdaVec = logspace(-2,2,9);
+
+
+%%%%%%%%%       LASSO analysis starts here      %%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% -- 6. PARALLEL analysis (trying NOT to change the names, will think about
+%%                          the comparisons later)
+
+% a. straight fit with different penalties
+[betaL1,msr, mcrit] = arrfit(XL1Mat,yVectL1,lambdaVec);
+
+indexL1 = abs(betaL1) > 0;
+% [log10(lambdaVec); sum(indexL1); msr*size(XL1Mat,1); mcrit]
+[log10(lambdaVec); sum(indexL1); msr; mcrit/size(XL1Mat,1)]
+
+LagL1 = round(100*(TiL1 - SiL1));
+
+crosstab(LagL1,(abs(betaL1(:,4))>0))
+
+[SiL1; TiL1; bHat'; betaL1(:,[3 5 7])']'
+
+sqrt(var(bHat))/sqrt(var(betaL1(:,4)))
+%    6.7705
+
+%% Plot of betaL1 coefficients
+figure
+subplot(1,1,1) 
+colormap(hot) 
+trisurf(eleNodesL1, SiL1, TiL1, betaL1(:,4)) 
+xlabel('\fontsize{12} s'); 
+ylabel('\fontsize{12} t'); 
+title(['hrv/pm25 Data ','ML1 = ',num2str(ML1),', BL1 = ',num2str(BL1)]) 
+colorbar
+
+%%%     Fit to the data based on the LASSO estimates        %%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+betaL1vec = betaL1(:,4);
+
+
+yHat1L1 = zeros(nfiney,N); 
+
+for i=1:N 
+    Xmati = squeeze(psiArray(i,:,:))'; 
+    yHat1L1(:,i) = Xmati*betaL1vec; 
+end 
+
+yHatMeanL1 = squeeze(psimeanArray)'*betaL1vec; 
+hrvmeanvec = eval_fd(hrvmeanfd, tmesh); 
+alphaHatL1 = hrvmeanvec - yHatMeanL1; 
+
+%  - Plot the intercept function. 
+subplot(2,1,1)
+plot(tmesh,alphaHatL1, '-g', tmesh, alphaHat, '--r')  
+axis([0,T,0,8]) 
+title('Estimated intercept function'); 
+
+%  - Plot the fit at the mean pm25 concentrations
+subplot(2,1,2)
+plot(tmesh,yHatMeanL1, '-g', tmesh, yHatMean, '--r') 
+axis([0,T,-4,4]) 
+title('Estimated predictions at the mean PM2.5 concentrations'); 
+
+%  - Final fit to the data. 
+yHatL1 = alphaHatL1*ones(1,N) + yHat1L1; 
+
+%  - Plot the data and the fit to the data. 
+subplot(2,1,1) 
+plot(tmesh, yHatL1) 
+axis([0,T,0,6]) 
+title('Fit to the data')
+subplot(2,1,2) 
+plot(tmesh, hrvfdDisc) 
+axis([0,T,0,6])
+title('Original data')
+
+%  - Plot the residuals. 
+subplot(1,1,1) 
+resmatL1 = hrvfdDisc - yHatL1; 
+plot(tmesh, resmatL1) 
+axis([0,T,-2,2]) 
+
+%% - Comparison with the LS estimates
+subplot(2,1,1) 
+resmatL1 = hrvfdDisc - yHatL1; 
+plot(tmesh, resmatL1) 
+axis([0,T,-2,2])
+title('L1 fit')
+
+subplot(2,1,2)
+plot(tmesh,resmat)
+axis([0,T,-2,2])
+title('Original fit')
+
+%%%%%       ----- Assessing the Fit 
+%  - Error sum of squares function. 
+SSEL1 = sum(resmatL1.^2,2); 
+subplot(1,1,1)
+plot(tmesh,SSEL1, '-g', tmesh, SSE, '--r');
+
+
+%  - Benchmark against which we can assess this fit, we need to get the 
+%  - corresponding error sum of squares function when the model is simply 
+%  - the mean hrv acceleration curve. 
+
+hrvmat0 = eval_fd(hrvfd0, tmesh); 
+SSY = sum(hrvmat0.^2,2); 
+
+%  - compute a squared multiple correlation function and plot it. 
+%  - Don't be suprised, though, to see it go below zero; 
+%  - the fit from the mean is not embedded within the fit by the model. 
+RSQL1 = (SSY - SSEL1)./SSY; 
+subplot(1,1,1) 
+plot(tmesh,RSQL1, '-g', tmesh, RSQ, '--r'); 
+axis([0,T,-0.2,1]) 
+
+[mean(RSQL1); mean(RSQ)]
+
+%% M=30, B=20
+% 10^(-.5)    0.5536        320 (72.6% of Total)
+% LS          0.5589        441
+
+
+%% M=40, B=10
+%                           lambdaVec      
+% LS           0.4260           0           396
+% 10^(-1.5)    0.4342           2           381
+% 10^(-.5)     0.3823           4           306
+% 10^(0)       0.3267           5           265
+% 10^(.5)      0.2507           6           215
+% 10^(1.5)     0.1056           8           134
+

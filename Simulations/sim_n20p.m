@@ -6,15 +6,14 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 %% add paths %%
-% addpath('./CODE');
-addpath('/Users/mjm556/Dropbox/Research/Drafts/Historical/Code')
+addpath('~/Code');
 
 %% set number of grid points %%
 T       = 2^5;
 N       = 20;
 
 %% grid for simulation surfaces %%
-sDens   = 1; % 1 (64), 0.5 (128), 0.25 (256), 0.125 (512), 0.0625 (1024)
+sDens   = 1; % 1 (64), 0.5 (128)
 [v, t]  = meshgrid(0:sDens:(T-sDens));
 
 %% scale to control STNR %%
@@ -98,7 +97,7 @@ wpspecs.perlagback  = perlagback;
 
 %% update Dx based on threshold %%
 model.Tx            = size(Dx,2);
-model.thresh        = model.Tx*(6/8); % model.Tx*(6/8);
+model.thresh        = model.Tx*(6/8); % model.Tx*(4/8); % half
 model.keep          = 1:(model.Tx-model.thresh);
 Dx                  = Dx(:,model.keep);
 
@@ -121,7 +120,7 @@ MCMCspecs.tau_prior_idx     = 1;        % 1 indicate that a_tau and b_tau depend
 MCMCspecs.PI_prior_var      = 0.06;     % this range should be in [0.02 0.09].
 
 %% simulate 200 datasets %%
-for seed = 101:200
+for seed = 1:200
     %% set seed %%
     rng(seed);
     
@@ -173,7 +172,7 @@ for seed = 101:200
     postout.runtime     = toc;
 
     %% save output %%
-    fname               = sprintf('/Volumes/G-DRIVE mobile/Research/Historical/Simulations/Peak/N20/Quarter/n50t512d%d.mat',seed);
+    fname               = sprintf('n50t512d%d.mat',seed);
     save(fname,'postout');
 
     %% clear large output %%

@@ -1,23 +1,22 @@
-%%%%%%%%%%%%%%%%%%%%% Delayed time-specific SIM %%%%%%%%%%%%%%%%%%%%
-% Delayed time-specific Effect , burnin 1000, sample 1000          %
+%%%%%%%%%%%%%%%%%%%%% Delayed Time-specific SIM %%%%%%%%%%%%%%%%%%%%
+% Delayed Time-specific Effect , burnin 1000, sample 1000          %
 % x(v) ~ GP(0, S) S~AR(1) estimated covariance from data           %
-% N = 50, T = 2^6                                                  %
-%                                                                  %
+% N = 50, T = 2^6/2^7                                              %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 %% add paths %%
-addpath('./Code')
+addpath('~/Code');
 
 %% set number of grid points %%
-T       = 2^6;
+T       = 2^6; % 2^7
 N       = 50;
 
 %% grid for simulation surfaces %%
-sDens   = 0.5; % 1 (64), 0.5 (128), 0.25 (256), 0.125 (512), 0.0625 (1024)
+sDens   = 1; % 1 (64), 0.5 (128)
 [v, t]  = meshgrid(0:sDens:(T-sDens));
 
 %% scale to control STNR %%
-stnrs   = 1257/4;
+stnrs   = 1257/4; %5000/557;
 
 %% bivariate normal params %%
 mv      = 45;
@@ -50,8 +49,8 @@ end
 
 %% generate ar(1) covariance pattern %%
 ar1Corr     = eye(T);
-sigma       = 3.5; % get from Journeyman data
-rho         = 0.75; % get from Journeyman data
+sigma       = 3.5; %1.5252;   % get from Journeyman data
+rho         = 0.75; %0.7697;   % get from Journeyman data
 for i = 1:T
     for j = (i+1):T
         ar1Corr(i,j) = rho^(j-i);
@@ -97,7 +96,7 @@ wpspecs.perlagback  = perlagback;
 
 %% update Dx based on threshold %%
 model.Tx            = size(Dx,2);
-model.thresh        = model.Tx*(6/8); % model.Tx*(4/8);
+model.thresh        = model.Tx*(6/8); % model.Tx*(4/8); % for half
 model.keep          = 1:(model.Tx-model.thresh);
 Dx                  = Dx(:,model.keep);
 
@@ -119,12 +118,11 @@ MCMCspecs.tau_prior_var     = 1e3;      % the variance of tau_{ijk} when finding
 MCMCspecs.tau_prior_idx     = 1;        % 1 indicate that a_tau and b_tau depend on ij, 0 indicate that they depend on jk. 
 MCMCspecs.PI_prior_var      = 0.06;     % this range should be in [0.02 0.09].
 
-%% set seed %%
-rng(2017) % 2020
-count   = 1; %0
-
 %% simulate 200 datasets %%
-while count < 200
+for seed = 1:200
+    %% set seed %%
+    rng(seed);
+    
     %% Use Sigma_E to generate matrix of model errors
     E           = zeros(N,T);
     muE         = zeros(T,1);
@@ -151,14 +149,9 @@ while count < 200
 
     %% run hwfmm %%
     tic;
-    try
-        res             = wphflm(Dy,model,wpspecs,MCMCspecs);
-    catch ME
-        continue
-    end
+    res             = wphflm(Dy,model,wpspecs,MCMCspecs);
     res.MCMCrun     = toc;
-    count           = count + 1;
-    
+
     %% extract results for post-processing %%
     MCMC_beta           = res.MCMC_beta;
     MCMC_zeta           = res.MCMC_zeta;
@@ -178,7 +171,7 @@ while count < 200
     postout.runtime     = toc;
 
     %% save output %%
-    fname               = sprintf('./n50t64hd%d.mat',count);
+    fname               = sprintf('n50t512d%d.mat',seed);
     save(fname,'postout');
 
     %% clear large output %%
