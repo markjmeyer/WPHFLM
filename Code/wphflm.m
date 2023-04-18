@@ -1,5 +1,5 @@
 function res = wphflm(Y,model,wpspecs,MCMCspecs) 
-%WPHFLM Fits the Historical Wavelet-based Functional Mixed Model and returns
+%WPHFLM Fits the Wavelet-Packet Historical Functional Linear Model and returns
 %       posterior estimates of the histrical surface as well as scalar
 %       covariates. Also performs Posterior Functional Inference on all
 %       covariates of interest via Bayesian False Discovery Rate and
