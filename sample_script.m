@@ -13,8 +13,7 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 %% add paths %%
-% addpath('./Code');
-addpath('/Users/mjm556/Dropbox/Research/Drafts/Historical/Code')
+addpath('./Code');
 
 %% set number of grid points %%
 T       = 2^5;
