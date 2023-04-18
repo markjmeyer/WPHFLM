@@ -1,11 +1,11 @@
 function res = wphflm(Y,model,wpspecs,MCMCspecs) 
-%HWFMM Fits the Historical Wavelet-based Functional Mixed Model and returns
+%WPHFLM Fits the Historical Wavelet-based Functional Mixed Model and returns
 %       posterior estimates of the histrical surface as well as scalar
 %       covariates. Also performs Posterior Functional Inference on all
 %       covariates of interest via Bayesian False Discovery Rate and
 %       Multiplicity Adjusted Probability Scores.
 %
-%   RES = HWFMM(Y, model, wpwspecs, MCMCspecs, sampleU) returns posterior
+%   RES = WPHFLM(Y, model, wpwspecs, MCMCspecs, sampleU) returns posterior
 %       estimates and inference for the historical model specified by
 %       outcome function Y and functional predictor model.X as well as
 %       scalar covariates model.W. wpspecs and MCMCspecs specify the
@@ -22,7 +22,6 @@ function res = wphflm(Y,model,wpspecs,MCMCspecs)
 %
 %   Output:
 %
-%   Note: hwfmm.m is based on wavfmm4_gbf.m. 
 %
 %   Created: 01/07/2014
 %   Edited:  02/26/2014
