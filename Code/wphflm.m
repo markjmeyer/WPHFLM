@@ -1,234 +1,134 @@
-function res = wphflm(Y,model,wpspecs,MCMCspecs) 
-%WPHFLM Fits the Wavelet-Packet Historical Functional Linear Model and returns
-%       posterior estimates of the histrical surface as well as scalar
-%       covariates. Also performs Posterior Functional Inference on all
-%       covariates of interest via Bayesian False Discovery Rate and
-%       Multiplicity Adjusted Probability Scores.
-%
-%   RES = WPHFLM(Y, model, wpwspecs, MCMCspecs, sampleU) returns posterior
-%       estimates and inference for the historical model specified by
-%       outcome function Y and functional predictor model.X as well as
-%       scalar covariates model.W. wpspecs and MCMCspecs specify the
-%       wavelet-packet and MCMC specifications for the model respectively.
-%       sampleU is a flag of whether or random effects have been included.
-%       model, wpspecs, and MCMCspecs must all be lists of the form
-%
-%       model:
-%               ''.keep must be vector containing columns of XW_x to keep
-%
-%       wpspecs:
-%
-%       MCMCspecs:
-%
-%   Output:
-%
-%
-%   Created: 01/07/2014
-%   Edited:  02/26/2014
-%   By: Mark John Meyer
+function postout = wphflm(Y, X, model, wpspecs, MCMCspecs)
 
-%% Step 1: Apply DWT to project observed functions into wavelet-pca space
-% [D,wavespecsy]  = dwt_rows(Y,wavespecsy);
-% fprintf('\n Finished projecting data to wavelet-PCA space.\n \n');
+%% decompose X(v) %%
+[ Dx, wpspecsx ]    = dwpt_rows(X,wpspecs); %% replace simX
+wpspecs.wpspecsx    = wpspecsx;
 
-% unlist wpspecs components
-wpspecsy        = wpspecs.wpspecsy;
-wpspecsx        = wpspecs.wpspecsx;
+%% set lag based on number of levels %%
+perlagback          = 1.1;    % 1.1 for full surface
+wpspecs.lag         = round(perlagback*size(Dx,2)/(2^(wpspecs.nlevels)));
+wpspecs.perlagback  = perlagback;
 
-% extract y-space Kj
-% default of length two since each step of hackett decomposition is DWT level 1
-Kj      = zeros(2,wpspecsy.dwtAtLevel(wpspecs.nlevels));
-k       = wpspecsy.dwtAtLevel(wpspecs.nlevels);
-for i = 1:wpspecsy.dwtAtLevel(wpspecs.nlevels)
-    Kj(:,i) = wpspecsy.trackerJacker{k}.Kj;
-    k       = k+1;
-end
-Kj      = reshape(Kj,1,2*wpspecsy.dwtAtLevel(wpspecs.nlevels));
+%% update Dx based on threshold %%
+model.Tx            = size(Dx,2);
+model.thresh        = model.Tx*(1-model.wpKeep); % model.Tx*(6/8);
+model.keep          = 1:(model.Tx-model.thresh);
+Dx                  = Dx(:,model.keep);
 
-%% set up elements for initial values
-[model.n,model.p]   = size(model.X);    %%% n=# functions, p=# columns of X
-model.c             = size(model.C,2);  %%% assumed to be iid mean zero with a
-wpspecs.K   = sum(Kj);
-wpspecs.J   = length(Kj);
-wpspecs.Kj  = Kj;
-wpspecs.T   = wpspecsy.trackerJacker{1}.T;
-wpspecs.V   = wpspecsx.trackerJacker{1}.T;
-meanop      = uneqkron(Kj)*diag(1./Kj);
-expandop    = uneqkron(Kj)';
-wsize       = size(model.W,2)+1; %% +1 for intercept
-fsize       = model.p - wsize; %% start with V, remove however many columns are in W (wsize includes intercept)
-lag         = wpspecs.lag;
+%% MCMCspecs %%
+MCMCspecs.propsdTheta       = 1;
+MCMCspecs.nj_nosmooth       = 1;        % can be 0, if is 0, don't do any constraint for pi_{ij}, bigTau_{ij}.
+MCMCspecs.minp              = 1e-14;
+MCMCspecs.maxO              = 1e20;
+MCMCspecs.minVC             = 1e-20;
+MCMCspecs.VC0_thresh        = 1e-4;
+MCMCspecs.delta_theta       = 1e-4;
+MCMCspecs.thetaMLE_maxiter  = 10^6;
+MCMCspecs.EmpBayes_maxiter  = 10^6;
+MCMCspecs.time_update       = 100;
+MCMCspecs.tau_prior_var     = 1e3;      % the variance of tau_{ijk} when finding prior parameters for tau_{ijk}.
+MCMCspecs.tau_prior_idx     = 1;        % 1 indicate that a_tau and b_tau depend on ij, 0 indicate that they depend on jk. 
+MCMCspecs.PI_prior_var      = 0.06;     % this range should be in [0.02 0.09].
 
-tic
-%% ========================================================================
-% if isempty(model.Z{1})||(sum(sum(model.Z{1})) == 0)
-model.H     = 0;
-W           = GetW(model,Y);
-[theta_mle,theta_sd,betans,Vbetans,Wv,] = regression_mle(W,model,Y,wpspecs,MCMCspecs);
-% else
-%     model.H     = length(model.Z);           %%% H=# of sets of random effects    
-%     model.m     = zeros(1,model.H);       %%% # of random effects per set %#zhu#% When z{1}=0, model.m=[];
-%     for h = 1:model.H
-%         model.m(h)  = size(model.Z{h},2);  %#zhu#% When z{1}=0, this loop will not be excuted since model.H=0
-%     end
-%     %%% Compute the initial value of theta using MLE and standard
-%     %%% deviation.
-%     model.M     = sum(model.m);
-%     W           = GetW(model,Y);
-%     theta0      = chi2rnd(1,model.H+model.c,wpspecs.K);
-%     [theta_mle,~,theta_sd,~,betans,Vbetans,u_mle,Wv,~] = mixed_mle(W,theta0,model,Y,wpspecs,MCMCspecs);
-%     initial.u_mle = u_mle;
-% end
+%% construct and decompose Y(t) %%
+[ Dy, wpspecsy ]    = dwpt_rows(Y,wpspecs); %% replace Y
+wpspecs.wpspecsy    = wpspecsy;
+    
+%% set up function specs %%
+N   = size(Y,1);
+a   = ones(N,1);
+W   = []; % add scalar covariates here
+Z   = []; % use fixed effects only
+model.X     = [ Dx a W ];
+model.Z{1}  = Z;
+model.W     = W;
+model.Dx    = Dx;
+model.C     = ones(size(Y,1),1);
+model.H     = 1;
+model.Hstar = 0;
 
-%% 
-% betans              = zeros(size(betans));
-% Vbetans             = ones(size(Vbetans));
+%% run hwfmm %%
+tic;
+res             = wphflm_fit(Dy,model,wpspecs,MCMCspecs);
+res.MCMCrun     = toc;
 
-%% save the initial values
-initial.theta_mle   = theta_mle;
-initial.betans      = betans;
-initial.beta_mle    = betans; % these two are the same.
+%% extract results for post-processing %%
+MCMC_beta           = res.MCMC_beta;
+MCMC_zeta           = res.MCMC_zeta;
+MCMC_alpha          = res.MCMC_alpha;
+MCMC_flag_theta     = res.MCMC_flag_theta;
+MCMC_tau            = res.MCMC_tau;
+MCMC_pi             = res.MCMC_pi;
+MCMC_theta          = res.MCMC_theta;
+theta               = res.theta;
+model               = res.model;
+wpspecs             = res.wpspecs;
 
-%% ========================================================================
-%%%% Check whether X matrix is orthogonal
-%%%% If it is, then some calculation shortcuts are available later
-if (sum(sum(abs(diag(diag(W.XtX))-W.XtX)>1e-15))>0)
-    orthogonal = 0;
-else
-    orthogonal = 1;
-end
-model.orthogonal_X  = orthogonal;
+%% run post-processor %%
+postout             = PostProcess(MCMC_beta,MCMC_zeta,MCMC_alpha,MCMC_flag_theta,MCMC_tau,MCMC_pi,MCMC_theta,theta,model,wpspecs);
+postout.runtime     = toc;
+postout.res         = res;
+    
+%% view posterior results %%
 
-theta               = theta_mle;
-theta_flag          = (theta_mle>=MCMCspecs.VC0_thresh); % If less than VC0_thresh, treat it as zero and don't update in MH.(stepsize=0)
-propsd_Theta        = MH_stepsize(theta_sd,theta_mle,MCMCspecs.propsdTheta,0).*theta_flag; % if theta_flag=1, then step size=0.
-
-%% Set initial values for shrinkage hyperparameters pi and tau. 
-[tau,PI,alpha,a_tau,b_tau,a_pi,b_pi] = initial_taupi(betans,Vbetans,model,wpspecs,MCMCspecs,meanop);
-initial.PI      = PI;
-initial.tau     = tau;
-initial.a_tau   = a_tau;
-initial.b_tau   = b_tau;
-initial.a_pi    = a_pi;
-initial.b_pi    = b_pi;
-
-%% get PiMat, TauMat, L2, initial value of beta %%
-PiMat           = PI*expandop;              % expand from p by J to p by K by repeating within same level.
-TauMat          = tau*expandop./Vbetans;    % In this code, do we always assume covT=1?
-
-beta            = betans.*alpha.*(TauMat./(TauMat+1));  % Posterior expected values of beta.
-Wv.L2           = Get_L2(beta,Wv,wpspecs);              % Update L2 for starting values of beta
-
-%% set up historical coef flag matrix %%
-histMark            = ones(wpspecs.K,wpspecs.K);
-fullHistCoef        = wavphc(histMark, wpspecsx, wpspecsy, lag);
-sampHistCoef        = fullHistCoef(model.keep,:);
-
-%% separate functional from scalar covariates and constrain surface %%
-betaf               = beta(1:fsize,:); % functional betas only
-betah               = zeros(size(sampHistCoef));
-for i = 1:size(sampHistCoef,1)
-    for j = 1:size(sampHistCoef,2)
-        if sampHistCoef(i,j)
-            betah(i,j)  = betaf(i,j);
+%% set-up for graphing %%
+T       = size(postout.bhat,1);
+bmath   = nan(T,T);
+for i = 1:T
+    for j = i:T
+        if j < i+round(T*1.1)
+            bmath(i,j) = postout.bhat(i,j);
         end
     end
 end
+postout.bmath       = bmath;
 
-%% add in scalar coefs to sampling matrix %%
-scalCoef            = ones(wsize,wpspecs.K);
-model.sampCoef      = [sampHistCoef; scalCoef];
-model.sampHistCoef  = sampHistCoef;
-
-%% update betans with constrained initial values %%
-beta(1:fsize,:)     = betah;
-
-fprintf('\n Now have starting values for regularization parameters. \n \n');
-
-%% Compute vague proper priors for theta based on empirical Bayes.
-[prior_Theta_a,prior_Theta_b] = EmpBayes_Theta(theta_mle,model,MCMCspecs);
-fprintf('\n Starting Values Initialized. \n \n'),toc;
-
-%%
-p           = model.p;
-K           = wpspecs.K;
-B           = MCMCspecs.B;
-burnin      = MCMCspecs.burnin;
-thin        = MCMCspecs.thin;
-blocksize   = B;
-
-%%
-MCMC_alpha          = NaN(blocksize,p*K); 
-MCMC_beta           = NaN(blocksize,fsize*K); %% functional coefficients
-MCMC_zeta           = NaN(blocksize,wsize*K); %% scalar coefficients
-MCMC_theta          = NaN(blocksize,size(theta,1)*size(theta,2));
-MCMC_flag_theta     = NaN(blocksize,K); %% indicator function of acceptance of new set of VCs
-if (model.H>0)&&(MCMCspecs.sampleU==1) 
-    MCMC_U = NaN(blocksize,sum(model.m)*K);
-end
-
-%%
-MCMC_tau    = NaN(blocksize,p*wpspecs.J); % in the memory, we only save a block of the samples. 
-MCMC_pi     = NaN(blocksize,p*wpspecs.J);
-
-ii              = 0; % counter for MCMC samples to output
-tic
-%% MCMC Loop: B is desired # samples
-for i = 1:(B*thin+burnin)
-        
-    %% (1) update beta %%
-    [beta, gamma, alpha]    = UpdateBetaNoOrthog_hist(beta, Vbetans, PiMat, TauMat, Wv, model, wpspecs, MCMCspecs);
-    Wv.L2                   = Get_L2(beta,Wv,wpspecs);
-    
-    %% (2) Update theta. q_jk, and s_jk %%
-    [theta,flag_theta,Vbetans,Wv] = UpdateTheta(beta,theta,Vbetans,Wv,Y,W,model,prior_Theta_a,prior_Theta_b,propsd_Theta,wpspecs,MCMCspecs);   
-    
-    %% (3) Update U when needed %%
-%     if (model.H > 0) && (sampleU == 1)
-%        U = UpdateU(beta,theta,model,Y,wpspecs);
-%     end
-    
-    %% (4) Update tau_ijk(as well as TauMat) and PI_ij(as well as PiMat) %%
-    tau     = Update_tau(beta,gamma,a_tau,b_tau,meanop);
-    TauMat  = tau*expandop./Vbetans;
-    PI      = Update_pi(gamma,a_pi,b_pi,wpspecs);
-    PiMat   = PI*expandop;
-    
-    %%
-    %%%%%%  Record MCMC samples.%%%%%%    
-    if   (i > burnin) && (mod(i-burnin,thin) == 0)   %% Save MCMC samples of beta in single matrix.
-            ii                      = ii+1; % this is the real row number among the B samples.
-            is                      = mod(ii-1,blocksize)+1; % this is the row number in the block.
-            MCMC_beta(is,:)         = reshape(beta(1:fsize,:),1,fsize*K); % record functional covariates
-            MCMC_zeta(is,:)         = reshape(beta((fsize+1):end,:),1,wsize*K); % record scalar covariates
-            MCMC_alpha(is,:)        = reshape(alpha',1,p*K); % P(gamma == 1)
-            MCMC_theta(is,:)        = reshape(theta,1,size(theta,1)*size(theta,2));
-            MCMC_flag_theta(is,:)   = flag_theta; 
-            MCMC_tau(is,:)          = reshape(tau,1,p*wpspecs.J);   % each block is one j, contains p values.
-            MCMC_pi(is,:)           = reshape(PI,1,p*wpspecs.J); % [pi_{11},...pi(1J1);pi_{21},...,pi{2J2};..],J blocks, each block has p values.            
-%             if (model.H > 0) && (sampleU == 1) 
-%                MCMC_U(is,:) = reshape(U',1,numel(U));    
-%             end
+%% define bfFlag %%
+%  indexes hist coefs  %
+bf      = zeros(size(postout.bhat));
+for i = 1:size(bf,1)
+    for j = i:size(bf,2)
+        bf(i,j) = 1;
     end
-    if mod(i, 10) == 0
-        fprintf('.')
-    end    
-    if mod(i, MCMCspecs.time_update) == 0
-       fprintf('\n %d \n',i),toc;
-    end
-    
 end
+T       = size(bf,1);
+bfFlag	= reshape(bf,1,T*T);
+postout.bfFlag       = bfFlag;
 
-fprintf('\n Done with MCMC \n');
+%% generate joint intervals and SimBa Scores %%
+%  NB: uses alpha = 0.05, change if desired   %
+[SBSb, upper_CIb, lower_CIb]	= jointband_sbs(postout.bINF,model.alf);
+SBS                             = zeros(size(bfFlag));
+SBS(bfFlag == 1)                = SBSb;
+sbs1                            = reshape(SBS,T,T);
 
-res.MCMC_beta           = MCMC_beta;   %% functional covariates
-res.MCMC_zeta           = MCMC_zeta;   %% intercept plus scalar covariates (if any)
-res.MCMC_alpha          = MCMC_alpha;
-res.MCMC_theta          = MCMC_theta;
-res.MCMC_flag_theta     = MCMC_flag_theta;
-res.MCMC_tau            = MCMC_tau;
-res.MCMC_pi             = MCMC_pi;
-res.theta               = theta;
-res.model               = model;
-res.initial             = initial;
-res.wpspecs             = wpspecs;
+USBS                            = zeros(size(bfFlag));
+USBS(bfFlag == 1)               = upper_CIb;
+usbs                            = reshape(USBS,T,T);
+
+LSBS                            = zeros(size(bfFlag));
+LSBS(bfFlag == 1)               = lower_CIb;
+lsbs                            = reshape(LSBS,T,T);
+
+%% set-up for graphing %%
+sbs     = nan(T,T);
+sbsf    = nan(T,T);
+sbsu    = nan(T,T);
+sbsl    = nan(T,T);
+for i = 1:T
+    for j = i:T
+        if j < i+round(T*1.1)
+            sbs(i,j)    = sbs1(i,j);
+            sbsu(i,j)   = usbs(i,j);
+            sbsl(i,j)   = lsbs(i,j);
+            sbsf(i,j)   = 1*(sbs(i,j) < 0.05);
+        end
+    end
+end
+postout.sbs       = sbs;
+postout.sbsu      = sbsu;
+postout.sbsl      = sbsl;
+postout.sbsf      = sbsf;
+
+
+

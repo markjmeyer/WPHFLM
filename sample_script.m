@@ -13,7 +13,8 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 %% add paths %%
-addpath('./Code');
+% addpath('~/Code');
+addpath('~/Documents/Code/WPHFLM/Code')
 
 %% set number of grid points %%
 T       = 2^5;
@@ -88,44 +89,6 @@ end
 
 Sigma_E     = sigmae*CovStr;
 
-%% specs for packets %%
-wpspecs.wavelet     = 'db3';
-wpspecs.wtmode      = 'zpd';
-wpspecs.nlevels     = 3;
-
-%% decompose X(v) %%
-[ Dx, wpspecsx ]    = dwpt_rows(simX,wpspecs); %% replace simX
-wpspecs.wpspecsx    = wpspecsx;
-
-%% set lag based on number of levels %%
-perlagback          = 1.1;    % 1.1 for full surface
-wpspecs.lag         = round(perlagback*size(Dx,2)/(2^(wpspecs.nlevels)));
-wpspecs.perlagback  = perlagback;
-
-%% update Dx based on threshold %%
-model.Tx            = size(Dx,2);
-model.thresh        = model.Tx*(6/8); % model.Tx*(6/8);
-model.keep          = 1:(model.Tx-model.thresh);
-Dx                  = Dx(:,model.keep);
-
-%% MCMCspecs %%
-MCMCspecs.B                 = 1000;
-MCMCspecs.burnin            = 1000;
-MCMCspecs.thin              = 1;
-MCMCspecs.propsdTheta       = 1;
-MCMCspecs.nj_nosmooth       = 1;        % can be 0, if is 0, don't do any constraint for pi_{ij}, bigTau_{ij}.
-MCMCspecs.minp              = 1e-14;
-MCMCspecs.maxO              = 1e20;
-MCMCspecs.minVC             = 1e-20;
-MCMCspecs.VC0_thresh        = 1e-4;
-MCMCspecs.delta_theta       = 1e-4;
-MCMCspecs.thetaMLE_maxiter  = 10^6;
-MCMCspecs.EmpBayes_maxiter  = 10^6;
-MCMCspecs.time_update       = 100;
-MCMCspecs.tau_prior_var     = 1e3;      % the variance of tau_{ijk} when finding prior parameters for tau_{ijk}.
-MCMCspecs.tau_prior_idx     = 1;        % 1 indicate that a_tau and b_tau depend on ij, 0 indicate that they depend on jk. 
-MCMCspecs.PI_prior_var      = 0.06;     % this range should be in [0.02 0.09].
-
 %% Use Sigma_E to generate matrix of model errors %%
 E           = zeros(N,T);
 muE         = zeros(T,1);
@@ -135,111 +98,37 @@ end
 
 %% construct and decompose Y(t) %%
 Y                   = simX*bh + E;
-[ Dy, wpspecsy ]    = dwpt_rows(Y,wpspecs); %% replace Y
-wpspecs.wpspecsy    = wpspecsy;
-    
-%% set up function specs %%
-a   = ones(N,1);
-W   = []; % add scalar covariates here
-Z   = []; % use fixed effects only
-model.X     = [ Dx a W ];
-model.Z{1}  = Z;
-model.W     = W;
-model.Dx    = Dx;
-model.C     = ones(size(Y,1),1);
-model.H     = 1;
-model.Hstar = 0;
 
-%% run hwfmm %%
-tic;
-res             = wphflm(Dy,model,wpspecs,MCMCspecs);
-res.MCMCrun     = toc;
+%% model specs %%
+model.alf           = 0.05; % global alpha
+model.delt          = 0.05; % threshold for Bayesian FDR
+model.wpKeep        = 0.25; % keep wpKeep percent of x-space wavelet packets
 
-%% extract results for post-processing %%
-MCMC_beta           = res.MCMC_beta;
-MCMC_zeta           = res.MCMC_zeta;
-MCMC_alpha          = res.MCMC_alpha;
-MCMC_flag_theta     = res.MCMC_flag_theta;
-MCMC_tau            = res.MCMC_tau;
-MCMC_pi             = res.MCMC_pi;
-MCMC_theta          = res.MCMC_theta;
-theta               = res.theta;
-model               = res.model;
-wpspecs             = res.wpspecs;
-model.delt          = 0.05;
-model.alf           = 0.05;
+%% specs for packets %%
+wpspecs.wavelet     = 'db3';
+wpspecs.wtmode      = 'zpd';
+wpspecs.nlevels     = 3;
 
-%% run post-processor %%
-postout             = PostProcess(MCMC_beta,MCMC_zeta,MCMC_alpha,MCMC_flag_theta,MCMC_tau,MCMC_pi,MCMC_theta,theta,model,wpspecs);
-postout.runtime     = toc;
-postout.res         = res;
-    
-%% view posterior results %%
+%% MCMCspecs %%
+MCMCspecs.B                 = 1000;
+MCMCspecs.burnin            = 1000;
+MCMCspecs.thin              = 1;
 
-%% set-up for graphing %%
-T       = size(postout.bhat,1);
-bmath   = nan(T,T);
-for i = 1:T
-    for j = i:T
-        if j < i+round(T*1.1)
-            bmath(i,j) = postout.bhat(i,j);
-        end
-    end
-end
+%% run model %%
+postout = wphflm(Y, simX, model, wpspecs, MCMCspecs);
 
-%% define bfFlag %%
-%  indexes hist coefs  %
-bf      = zeros(size(postout.bhat));
-for i = 1:size(bf,1)
-    for j = i:size(bf,2)
-        bf(i,j) = 1;
-    end
-end
-T       = size(bf,1);
-bfFlag	= reshape(bf,1,T*T);
-
-%% generate joint intervals and SimBa Scores %%
-%  NB: uses alpha = 0.05, change if desired   %
-[SBSb, upper_CIb, lower_CIb]	= jointband_sbs(postout.bINF,0.05);
-SBS                             = zeros(size(bfFlag));
-SBS(bfFlag == 1)                = SBSb;
-sbs1                            = reshape(SBS,T,T);
-
-USBS                            = zeros(size(bfFlag));
-USBS(bfFlag == 1)               = upper_CIb;
-usbs                            = reshape(USBS,T,T);
-
-LSBS                            = zeros(size(bfFlag));
-LSBS(bfFlag == 1)               = lower_CIb;
-lsbs                            = reshape(LSBS,T,T);
-
-%% set-up for graphing %%
-sbs     = nan(T,T);
-sbsf    = nan(T,T);
-sbsu    = nan(T,T);
-sbsl    = nan(T,T);
-for i = 1:T
-    for j = i:T
-        if j < i+round(T*1.1)
-            sbs(i,j)    = sbs1(i,j);
-            sbsu(i,j)   = usbs(i,j);
-            sbsl(i,j)   = lsbs(i,j);
-            sbsf(i,j)   = 1*(sbs(i,j) < 0.05);
-        end
-    end
-end
-    
 %% estimated surface
 figure1 = figure; axes1 = axes('Parent',figure1); hold(axes1,'on');
-surf(bmath','FaceColor','interp','EdgeColor','none'); xlim([1 T]); ylim([1 T]); view(0, 90); colorbar
+surf(postout.bmath','FaceColor','interp','EdgeColor','none'); xlim([1 T]); ylim([1 T]); view(0, 90);
+colorbar(axes1,'Ticks',[0 0.5 1 1.5 2],'FontSize',14);
 set(axes1,'FontSize',14,'XGrid','on','YGrid','on');
 xlabel('v','FontSize',14);
 ylabel('t','FontSize',14);
-title({'\beta(v,t)'});
+title({'Meyer, Malloy, & Coull (2021)'});
 
 %% simba scores
 figure1 = figure; axes1 = axes('Parent',figure1); hold(axes1,'on');
-surf(sbs','FaceColor','interp','EdgeColor','none'); xlim([1 T]); ylim([1 T]); view(0, 90); colorbar
+surf(postout.sbs','FaceColor','interp','EdgeColor','none'); xlim([1 T]); ylim([1 T]); view(0, 90); colorbar
 colormap(copper)
 caxis([0 0.5])
 set(axes1,'FontSize',14,'XGrid','on','YGrid','on');
@@ -249,7 +138,7 @@ title({'SimBa Scores'});
 
 %% significant coef
 figure1 = figure; axes1 = axes('Parent',figure1); hold(axes1,'on');
-surf(sbsf','EdgeColor','none'); xlim([1 T]); ylim([1 T]); view(0, 90); colorbar
+surf(postout.sbsf','EdgeColor','none'); xlim([1 T]); ylim([1 T]); view(0, 90); colorbar
 colormap(copper)
 caxis([0 1])
 set(axes1,'FontSize',14,'XGrid','on','YGrid','on');
@@ -259,7 +148,7 @@ title({'Significant Coefficients'});
 
 %% joint lower
 figure1 = figure; axes1 = axes('Parent',figure1); hold(axes1,'on');
-surf(sbsl','FaceColor','interp','EdgeColor','none'); xlim([1 T]); ylim([1 T]); view(0, 90); colorbar
+surf(postout.sbsl','FaceColor','interp','EdgeColor','none'); xlim([1 T]); ylim([1 T]); view(0, 90); colorbar
 set(axes1,'FontSize',14,'XGrid','on','YGrid','on');
 xlabel('v','FontSize',14);
 ylabel('t','FontSize',14);
@@ -267,7 +156,7 @@ title({'Joint Interval, Lower Bound'});
 
 %% joint upper
 figure1 = figure; axes1 = axes('Parent',figure1); hold(axes1,'on');
-surf(sbsu','FaceColor','interp','EdgeColor','none'); xlim([1 T]); ylim([1 T]); view(0, 90); colorbar
+surf(postout.sbsu','FaceColor','interp','EdgeColor','none'); xlim([1 T]); ylim([1 T]); view(0, 90); colorbar
 set(axes1,'FontSize',14,'XGrid','on','YGrid','on');
 xlabel('v','FontSize',14);
 ylabel('t','FontSize',14);
