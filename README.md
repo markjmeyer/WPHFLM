@@ -1,5 +1,5 @@
 # WPHFLM
-Code to implement Bayesian Wavelet-packet Historical Functional Linear Models as described in Meyer, Malloy, and Coull (2021).
+Code to implement Bayesian Wavelet-packet Historical Functional Linear Models as described in Meyer, Malloy, and Coull (2021) available at https://doi.org/10.1007/s11222-020-09981-3.
 
 sample_script.m contains a sample script with a single simulated setting for illustration.
 
